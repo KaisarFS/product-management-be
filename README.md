@@ -1,100 +1,75 @@
-# Backend API
+## Backend API
 
-Node.js/Express service that provides JWT-secured authentication and CRUD endpoints for the product dashboard. It validates captcha tokens, hashes user passwords with bcrypt, and persists data in PostgreSQL.
+### Requirements
 
-## Prerequisites
+- Node.js 18+
+- PostgreSQL 14+
 
-- Node.js 18 or newer (`node -v`)
-- npm 9+ (`npm -v`)
-- PostgreSQL 14+ (`psql --version`)
+### Environment Variables
 
-## Project Setup
+Create a `.env` file in this directory with the following keys:
 
-1. **Install dependencies**
-   ```bash
-   cd backend
-   npm install
-   ```
+```
+PORT=4000
+DATABASE_URL=postgres://user:password@localhost:5432/product_management
+DATABASE_SSL=false
+JWT_SECRET=pisang_goreng
+JWT_EXPIRATION=1h
+CAPTCHA_PROVIDER=recaptcha # or hcaptcha
+CAPTCHA_SECRET_KEY=your-captcha-secret
+# CAPTCHA_VERIFY_URL=https://custom-provider.example.com/siteverify (optional override)
+# CORS_ORIGIN=http://localhost:5173 (optional)
+```
 
-2. **Create environment file** – copy the template below into `backend/.env` and adjust the values to your machine (database name, user, and secrets).
-   ```
-   PORT=4000
-   DATABASE_URL=postgres://postgres:postgres@localhost:5432/product_management
-   DATABASE_SSL=false
-   JWT_SECRET=your-jwt-secret
-   JWT_EXPIRATION=1h
-   CAPTCHA_PROVIDER=recaptcha # or hcaptcha
-   CAPTCHA_SECRET_KEY=your-captcha-secret
-   # CAPTCHA_VERIFY_URL=https://custom-provider.example.com/siteverify
-   CORS_ORIGIN=http://localhost:5173
-   ```
-   - `DATABASE_URL` must contain valid PostgreSQL credentials. If you use peer auth, remove the password segment (e.g. `postgres://<your-user>@localhost:5432/product_management`).
-   - Set `CAPTCHA_SECRET_KEY` to the server-side secret that matches the site key used in the frontend.
+### Database Setup
 
-3. **Provision the database**
-   ```bash
-   createdb product_management
-   psql product_management <<'SQL'
-   CREATE TABLE IF NOT EXISTS users (
-     id SERIAL PRIMARY KEY,
-     username VARCHAR(50) UNIQUE NOT NULL,
-     password_hash VARCHAR(100) NOT NULL
-   );
+```sql
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password_hash VARCHAR(100) NOT NULL
+);
 
-   CREATE TABLE IF NOT EXISTS products (
-     id SERIAL PRIMARY KEY,
-     name VARCHAR(100),
-     description TEXT,
-     price DECIMAL,
-     image_url VARCHAR(255),
-     latitude DECIMAL,
-     longitude DECIMAL
-   );
-   SQL
-   ```
+CREATE TABLE IF NOT EXISTS products (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100),
+  description TEXT,
+  price DECIMAL,
+  image_url VARCHAR(255),
+  latitude DECIMAL,
+  longitude DECIMAL
+);
+```
 
-4. **Seed an admin user**
-   ```bash
-   HASH=$(node -e "console.log(require('bcrypt').hashSync('yourStrongPassword', 12))")
-   psql product_management <<SQL
-   INSERT INTO users (username, password_hash)
-   VALUES ('admin', '$HASH')
-   ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
-   SQL
-   ```
-
-## Running the Server
+Seed at least one user by hashing the password with bcrypt:
 
 ```bash
+node -e "console.log(require('bcrypt').hashSync('password', 12))"
+```
+
+### Install & Run
+
+```bash
+npm install
 npm run dev
 ```
 
-The server boots on `http://localhost:4000`. Confirm it is healthy:
-```bash
-curl http://localhost:4000/health
-```
+The server starts on `http://localhost:4000`.
 
-Use the generated JWT to call protected endpoints, e.g.:
-```bash
-curl -H "Authorization: Bearer <token>" http://localhost:4000/api/products
-```
+### API Overview
 
-## API Overview
+- `POST /api/login`
+  - Body: `{ "username": "...", "password": "...", "captchaToken": "..." }`
+  - Response: `{ "token": "...", "user": { "id": 1, "username": "..." } }`
 
-- `POST /api/login` – body `{ username, password, captchaToken }`
+All product endpoints require an `Authorization: Bearer <JWT>` header.
+
 - `GET /api/products`
 - `POST /api/products`
 - `PUT /api/products/:id`
 - `DELETE /api/products/:id`
 
-All routes except `/api/login` require the `Authorization: Bearer <JWT>` header.
+### CAPTCHA
 
-## Useful Scripts
+The backend verifies Google reCAPTCHA v2/v3 or hCaptcha tokens. Provide the appropriate secret via `CAPTCHA_SECRET_KEY` and configure the frontend to send the token as `captchaToken`.
 
-- `npm run dev` – start the Nodemon dev server
-- `npm start` – run with Node
-- `npm run lint` – run ESLint checks
-
-## CAPTCHA Notes
-
-The backend currently targets Google reCAPTCHA. To switch to hCaptcha, set `CAPTCHA_PROVIDER=hcaptcha` and replace the secret key. You can also override the verification endpoint via `CAPTCHA_VERIFY_URL` to support enterprise or self-hosted variants.
